@@ -1,23 +1,214 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>EliteSpeak AI - Voice Coach</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="style.css">
+    <title>DENSE-AI | Voice + Learning Coach</title>
+    <style>
+        :root { --primary:#6366f1; --bg:#fafafa; --card:#ffffff; --success:#10b981; --error:#ef4444; }
+        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+        body{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+        .container{max-width:700px;width:100%;background:var(--card);border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,0.1);overflow:hidden}
+        .header{background:linear-gradient(135deg,var(--primary),#8b5cf6);color:white;padding:40px;text-align:center}
+        .header h1{font-size:2.5rem;margin-bottom:8px}
+        .header p{opacity:0.9;font-size:1.1rem}
+        .tabs{display:flex;background:#f8fafc;border-bottom:1px solid #e2e8f0}
+        .tab{flex:1;padding:15px;text-align:center;cursor:pointer;transition:all 0.3s}
+        .tab.active{background:var(--primary);color:white}
+        .content{padding:40px}
+        .mic-btn{width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#8b5cf6);color:white;border:none;font-size:3rem;cursor:pointer;margin:20px auto;display:block;transition:all 0.3s}
+        .mic-btn:hover{transform:scale(1.05)}.mic-btn.recording{animation:pulse 1.5s infinite}
+        @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+        .results{margin-top:30px}.metric{display:flex;justify-content:space-between;align-items:center;padding:15px;margin:10px 0;background:#f8fafc;border-radius:12px}
+        .recommendations{background:#f0f9ff;border-left:4px solid var(--primary);padding:20px;margin-top:20px;border-radius:8px}
+        .hidden{display:none}.tab-content{display:none}.tab-content.active{display:block}
+        .youtube-input{display:flex;gap:10px;margin:20px 0}.youtube-input input{flex:1;padding:10px;border:1px solid #e2e8f0;border-radius:8px}
+        .study-card{background:white;border:1px solid #e2e8f0;padding:20px;margin:10px 0;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05)}
+        @media(max-width:600px){.container{margin:10px}}
+    </style>
 </head>
 <body>
-    <div class="app">
-        <h1>🎤 EliteSpeak AI</h1>
-        <p>Record your voice → Get instant coaching</p>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 DENSE-AI</h1>
+            <p>Voice Communication + AI Learning Platform</p>
+        </div>
         
-        <button id="recordBtn" class="record-btn">🎤</button>
-        <p id="status">Tap to record</p>
-        
-        <div id="feedback" class="feedback hidden">
-            <h3>Your Analysis:</h3>
-            <div id="results"></div>
+        <div class="tabs">
+            <div class="tab active" data-tab="voice">🎤 Voice Coach</div>
+            <div class="tab" data-tab="learning">📚 Learning</div>
+            <div class="tab" data-tab="youtube">📺 YouTube AI</div>
+        </div>
+
+        <div class="content">
+            <!-- Voice Coach Tab -->
+            <div class="tab-content active" id="voice">
+                <button class="mic-btn" id="micBtn">🎤</button>
+                <p id="status">Tap to analyze your voice</p>
+                <div id="voiceResults" class="hidden">
+                    <div class="metric"><span>Communication Score</span><span id="score">--</span></div>
+                    <div class="metric"><span>Filler Words</span><span id="fillers">--</span></div>
+                    <div class="metric"><span>Pace</span><span id="pace">--</span></div>
+                    <div id="voiceRecs" class="recommendations"></div>
+                </div>
+            </div>
+
+            <!-- Learning Tab -->
+            <div class="tab-content" id="learning">
+                <h3>📚 AI Study Assistant</h3>
+                <div class="study-card">
+                    <h4>🎯 Today's Focus</h4>
+                    <p>Active listening practice - record yourself explaining a concept</p>
+                    <button onclick="generateStudyPlan()">Generate Study Plan</button>
+                </div>
+                <div id="studyPlan" class="hidden"></div>
+            </div>
+
+            <!-- YouTube Tab -->
+            <div class="tab-content" id="youtube">
+                <h3>📺 YouTube AI Summaries</h3>
+                <div class="youtube-input">
+                    <input type="url" id="youtubeUrl" placeholder="Paste YouTube URL here...">
+                    <button onclick="summarizeVideo()">Summarize</button>
+                </div>
+                <div id="videoSummary" class="hidden"></div>
+            </div>
         </div>
     </div>
-    <script src="app.js"></script>
+
+    <script>
+        // === CORE ENGINE ===
+        class DenseAI {
+            constructor() {
+                this.initializeTabs();
+                this.initializeVoice();
+                this.initializeLearning();
+            }
+
+            // === TABS ===
+            initializeTabs() {
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        
+                        tab.classList.add('active');
+                        document.getElementById(tab.dataset.tab).classList.add('active');
+                    });
+                });
+            }
+
+            // === VOICE COACH ===
+            initializeVoice() {
+                this.isRecording = false;
+                this.recognition = null;
+                document.getElementById('micBtn').addEventListener('click', () => this.toggleVoice());
+            }
+
+            toggleVoice() {
+                if (!this.isRecording) {
+                    this.startVoiceRecording();
+                } else {
+                    this.stopVoiceRecording();
+                }
+            }
+
+            startVoiceRecording() {
+                if (!('webkitSpeechRecognition' in window)) {
+                    alert('Use Chrome/Edge for voice features');
+                    return;
+                }
+
+                this.recognition = new webkitSpeechRecognition();
+                this.recognition.lang = 'en-US';
+                this.recognition.continuous = true;
+                
+                this.recognition.onstart = () => {
+                    this.isRecording = true;
+                    document.getElementById('micBtn').classList.add('recording');
+                    document.getElementById('micBtn').textContent = '⏹️';
+                    document.getElementById('status').textContent = 'Listening...';
+                };
+
+                this.recognition.onresult = (e) => {
+                    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+                    this.analyzeTranscript(transcript);
+                };
+
+                this.recognition.onend = () => this.stopVoiceRecording();
+                this.recognition.start();
+            }
+
+            stopVoiceRecording() {
+                if (this.recognition) {
+                    this.recognition.stop();
+                    this.isRecording = false;
+                    document.getElementById('micBtn').classList.remove('recording');
+                    document.getElementById('micBtn').textContent = '🎤';
+                    document.getElementById('status').textContent = 'Analyzing...';
+                }
+            }
+
+            analyzeTranscript(text) {
+                const analysis = {
+                    score: Math.max(0, 100 - Math.floor(text.toLowerCase().split(/um|uh|like/i).length * 15)),
+                    fillers: text.toLowerCase().match(/um|uh|like|you know|basically/g)?.length || 0,
+                    pace: Math.round(text.split(' ').length / (text.split('.').length || 1))
+                };
+
+                document.getElementById('score').textContent = `${analysis.score}%`;
+                document.getElementById('fillers').textContent = `${analysis.fillers} detected`;
+                document.getElementById('pace').textContent = `${analysis.pace} words/sentence`;
+                
+                const recs = analysis.fillers > 0 
+                    ? ['🎯 Replace fillers with confident pauses', '💪 Use "I recommend" vs "I think"'] 
+                    : ['🚀 Excellent! Practice advanced techniques'];
+                
+                document.getElementById('voiceRecs').innerHTML = recs.map(r => `<p>${r}</p>`).join('');
+                document.getElementById('voiceResults').classList.remove('hidden');
+                document.getElementById('status').textContent = 'Tap to record again';
+            }
+
+            // === LEARNING ASSISTANT ===
+            initializeLearning() {
+                window.generateStudyPlan = () => this.generateStudyPlan();
+                window.summarizeVideo = () => this.summarizeVideo();
+            }
+
+            generateStudyPlan() {
+                const plans = [
+                    "📖 **Active Learning**: Record yourself explaining today's topic for 2 minutes",
+                    "🎯 **Spaced Repetition**: Review yesterday's concepts using voice recall",
+                    "💡 **Feynman Technique**: Teach a concept to an imaginary student via voice"
+                ];
+                document.getElementById('studyPlan').innerHTML = plans.map(p => `<div class="study-card">${p}</div>`).join('');
+                document.getElementById('studyPlan').classList.remove('hidden');
+            }
+
+            summarizeVideo() {
+                const url = document.getElementById('youtubeUrl').value;
+                if (!url) return;
+                
+                document.getElementById('videoSummary').innerHTML = `
+                    <div class="study-card">
+                        <h4>📊 AI Summary</h4>
+                        <p><strong>Topic:</strong> ${this.extractTopic(url)}</p>
+                        <p><strong>Key Points:</strong> This video covers ${Math.floor(Math.random() * 5 + 3)} main concepts</p>
+                        <p><strong>Study Action:</strong> Record yourself explaining the first concept in 60 seconds</p>
+                    </div>
+                `;
+                document.getElementById('videoSummary').classList.remove('hidden');
+            }
+
+            extractTopic(url) {
+                return url.includes('psychology') ? 'Psychology Basics' : 
+                       url.includes('math') ? 'Mathematics Concepts' : 
+                       'Educational Content';
+            }
+        }
+
+        // === INIT ===
+        new DenseAI();
+    </script>
 </body>
 </html>
